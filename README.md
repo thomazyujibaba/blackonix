@@ -66,7 +66,7 @@ blackonix/
 
 ```bash
 # 1. Clone
-git clone https://github.com/yujimarques/blackonix.git
+git clone https://github.com/thomazyujibaba/blackonix.git
 cd blackonix
 
 # 2. Configure
