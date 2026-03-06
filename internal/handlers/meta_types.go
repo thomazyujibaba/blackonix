@@ -38,11 +38,17 @@ type MetaProfile struct {
 }
 
 type MetaMessage struct {
-	From      string    `json:"from"`
-	ID        string    `json:"id"`
-	Timestamp string    `json:"timestamp"`
-	Type      string    `json:"type"`
-	Text      *MetaText `json:"text,omitempty"`
+	From      string     `json:"from"`
+	ID        string     `json:"id"`
+	Timestamp string     `json:"timestamp"`
+	Type      string     `json:"type"`
+	Text      *MetaText  `json:"text,omitempty"`
+	Audio     *MetaAudio `json:"audio,omitempty"`
+}
+
+type MetaAudio struct {
+	ID       string `json:"id"`
+	MimeType string `json:"mime_type"`
 }
 
 type MetaText struct {

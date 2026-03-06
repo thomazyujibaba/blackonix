@@ -20,7 +20,7 @@ WhatsApp ──webhook──▸ BlackOnix ──▸ LLM (OpenAI)
                          │         Tool Calls
                          │              │
                          ▼              ▼
-                    Rocket.Chat    Plugins (Estoque, PIX, etc.)
+                    Rocket.Chat    Plugins (Whisper, PIX, etc.)
                     (Omnichannel)
                          │
                     Atendente Humano
@@ -51,7 +51,7 @@ blackonix/
 │   │   ├── agent/                  # AgentTool interface, ToolRegistry, Orchestrator
 │   │   └── state/                  # Máquina de estados (BOT ↔ HUMAN)
 │   ├── handlers/                   # Webhook handlers (Fiber)
-│   └── plugins/                    # Tools: TransferToHuman, CheckStock
+│   └── plugins/                    # Tools: TransferToHuman, AudioTranscriber
 ```
 
 ## Stack
@@ -87,10 +87,11 @@ Veja o [QUICKSTART.md](QUICKSTART.md) para o guia completo com screenshots e tro
 1. `POST /webhook` recebe mensagem da Meta
 2. Identifica o Tenant pelo WABA ID
 3. Cria/carrega Contact e Session
-4. **Se estado = HUMAN** → encaminha para Rocket.Chat
-5. **Se estado = BOT** → envia para LLM com Tools registradas
-6. Se a LLM pedir Tool Call → executa via Registry → devolve resultado
-7. Responde ao cliente via WhatsApp
+4. **Se áudio** → transcreve via Whisper automaticamente
+5. **Se estado = HUMAN** → encaminha para Rocket.Chat
+6. **Se estado = BOT** → envia para LLM com Tools registradas
+7. Se a LLM pedir Tool Call → executa via Registry → devolve resultado
+8. Responde ao cliente via WhatsApp
 
 ## Sistema de Plugins
 
@@ -115,13 +116,12 @@ registry.Register(meuNovoPPlugin)
 
 | Plugin | Descrição |
 |---|---|
-| `check_stock` | Consulta estoque de produtos (mock) |
+| `transcribe_audio` | Transcreve áudios do WhatsApp via OpenAI Whisper (automático) |
 | `transfer_to_human` | Transfere conversa para atendente no Rocket.Chat |
 
 ### Ideias para expansão
 
 - `PixGenerator` - Gerar cobranças PIX
-- `AudioTranscriber` - Transcrição de áudio via Whisper
 - `SalesCopilot` - Copiloto de vendas com contexto do cliente
 - `OrderTracker` - Rastreamento de pedidos
 

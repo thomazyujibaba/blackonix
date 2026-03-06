@@ -16,46 +16,49 @@ import (
 )
 
 type WebhookHandler struct {
-	tenantRepo  repository.TenantRepository
-	contactRepo repository.ContactRepository
-	sessionRepo repository.SessionRepository
-	messageRepo repository.MessageRepository
-	metaAPI     ports.MetaAPI
-	rocketChat  ports.RocketChatAPI
-	llmClient   ports.LLMClient
-	registry    *agent.ToolRegistry
-	stateMachine *state.Machine
-	verifyToken string
-	systemPrompt string
+	tenantRepo       repository.TenantRepository
+	contactRepo      repository.ContactRepository
+	sessionRepo      repository.SessionRepository
+	messageRepo      repository.MessageRepository
+	metaAPI          ports.MetaAPI
+	rocketChat       ports.RocketChatAPI
+	llmClient        ports.LLMClient
+	registry         *agent.ToolRegistry
+	stateMachine     *state.Machine
+	audioTranscriber *plugins.AudioTranscriberTool
+	verifyToken      string
+	systemPrompt     string
 }
 
 type WebhookHandlerConfig struct {
-	TenantRepo   repository.TenantRepository
-	ContactRepo  repository.ContactRepository
-	SessionRepo  repository.SessionRepository
-	MessageRepo  repository.MessageRepository
-	MetaAPI      ports.MetaAPI
-	RocketChat   ports.RocketChatAPI
-	LLMClient    ports.LLMClient
-	Registry     *agent.ToolRegistry
-	StateMachine *state.Machine
-	VerifyToken  string
-	SystemPrompt string
+	TenantRepo       repository.TenantRepository
+	ContactRepo      repository.ContactRepository
+	SessionRepo      repository.SessionRepository
+	MessageRepo      repository.MessageRepository
+	MetaAPI          ports.MetaAPI
+	RocketChat       ports.RocketChatAPI
+	LLMClient        ports.LLMClient
+	Registry         *agent.ToolRegistry
+	StateMachine     *state.Machine
+	AudioTranscriber *plugins.AudioTranscriberTool
+	VerifyToken      string
+	SystemPrompt     string
 }
 
 func NewWebhookHandler(cfg WebhookHandlerConfig) *WebhookHandler {
 	return &WebhookHandler{
-		tenantRepo:   cfg.TenantRepo,
-		contactRepo:  cfg.ContactRepo,
-		sessionRepo:  cfg.SessionRepo,
-		messageRepo:  cfg.MessageRepo,
-		metaAPI:      cfg.MetaAPI,
-		rocketChat:   cfg.RocketChat,
-		llmClient:    cfg.LLMClient,
-		registry:     cfg.Registry,
-		stateMachine: cfg.StateMachine,
-		verifyToken:  cfg.VerifyToken,
-		systemPrompt: cfg.SystemPrompt,
+		tenantRepo:       cfg.TenantRepo,
+		contactRepo:      cfg.ContactRepo,
+		sessionRepo:      cfg.SessionRepo,
+		messageRepo:      cfg.MessageRepo,
+		metaAPI:          cfg.MetaAPI,
+		rocketChat:       cfg.RocketChat,
+		llmClient:        cfg.LLMClient,
+		registry:         cfg.Registry,
+		stateMachine:     cfg.StateMachine,
+		audioTranscriber: cfg.AudioTranscriber,
+		verifyToken:      cfg.VerifyToken,
+		systemPrompt:     cfg.SystemPrompt,
 	}
 }
 
@@ -141,19 +144,32 @@ func (h *WebhookHandler) processMessage(ctx context.Context, tenant *domain.Tena
 		}
 	}
 
+	// Extrai o texto (transcreve áudio se necessário)
+	textBody := extractTextBody(msg)
+	if msg.Type == "audio" && msg.Audio != nil && h.audioTranscriber != nil {
+		transcript, err := h.audioTranscriber.Execute(ctx, map[string]interface{}{
+			"media_id":   msg.Audio.ID,
+			"meta_token": tenant.MetaToken,
+		})
+		if err != nil {
+			log.Printf("failed to transcribe audio: %v", err)
+			textBody = "[áudio recebido - falha na transcrição]"
+		} else {
+			textBody = transcript
+		}
+	}
+
 	// Persiste mensagem inbound
 	inboundMsg := &domain.Message{
 		TenantID:  tenant.ID,
 		SessionID: session.ID,
 		ContactID: contact.ID,
 		Direction: domain.MessageDirectionInbound,
-		Body:      extractTextBody(msg),
+		Body:      textBody,
 	}
 	if err := h.messageRepo.Create(ctx, inboundMsg); err != nil {
 		log.Printf("failed to save inbound message: %v", err)
 	}
-
-	textBody := extractTextBody(msg)
 
 	// 4. Se HUMAN -> envia para Rocket.Chat
 	if h.stateMachine.IsHuman(session) {

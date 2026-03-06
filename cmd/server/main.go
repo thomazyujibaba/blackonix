@@ -20,7 +20,8 @@ import (
 )
 
 const systemPrompt = `Você é o assistente virtual da loja. Seja educado, objetivo e útil.
-Você pode consultar o estoque de produtos e transferir o cliente para um atendente humano quando necessário.
+Você pode transcrever áudios e transferir o cliente para um atendente humano quando necessário.
+Se o cliente enviar um áudio, você receberá a transcrição automaticamente.
 Responda sempre em português brasileiro.`
 
 func main() {
@@ -52,7 +53,7 @@ func main() {
 
 	// 6. Tool Registry (plugins globais)
 	registry := agent.NewToolRegistry()
-	registry.Register(plugins.NewCheckStockTool())
+	audioTranscriber := plugins.NewAudioTranscriberTool(cfg.LLMApiKey, metaAPI)
 	// TransferToHumanTool é registrado por request (depende da session)
 
 	// 7. Fiber App
@@ -65,17 +66,18 @@ func main() {
 
 	// 8. Webhook Handler com DI
 	webhookHandler := handlers.NewWebhookHandler(handlers.WebhookHandlerConfig{
-		TenantRepo:   tenantRepo,
-		ContactRepo:  contactRepo,
-		SessionRepo:  sessionRepo,
-		MessageRepo:  messageRepo,
-		MetaAPI:      metaAPI,
-		RocketChat:   rocketChatAPI,
-		LLMClient:    llmClient,
-		Registry:     registry,
-		StateMachine: stateMachine,
-		VerifyToken:  cfg.MetaVerifyToken,
-		SystemPrompt: systemPrompt,
+		TenantRepo:       tenantRepo,
+		ContactRepo:      contactRepo,
+		SessionRepo:      sessionRepo,
+		MessageRepo:      messageRepo,
+		MetaAPI:          metaAPI,
+		RocketChat:       rocketChatAPI,
+		LLMClient:        llmClient,
+		Registry:         registry,
+		StateMachine:     stateMachine,
+		AudioTranscriber: audioTranscriber,
+		VerifyToken:      cfg.MetaVerifyToken,
+		SystemPrompt:     systemPrompt,
 	})
 
 	// 9. Rotas
