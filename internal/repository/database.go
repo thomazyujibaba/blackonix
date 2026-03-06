@@ -27,6 +27,7 @@ func NewDatabase(dsn string) (*gorm.DB, error) {
 
 	if err := db.AutoMigrate(
 		&domain.Tenant{},
+		&domain.Channel{},
 		&domain.Contact{},
 		&domain.Session{},
 		&domain.Message{},

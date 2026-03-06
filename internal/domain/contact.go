@@ -7,8 +7,10 @@ type Contact struct {
 	TenantID    string `gorm:"type:uuid;not null;index"`
 	PhoneNumber string `gorm:"not null;index"`
 	Name        string
+	ChannelID   string  `gorm:"type:uuid;index"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 
-	Tenant Tenant `gorm:"foreignKey:TenantID"`
+	Tenant  Tenant  `gorm:"foreignKey:TenantID"`
+	Channel Channel `gorm:"foreignKey:ChannelID"`
 }
