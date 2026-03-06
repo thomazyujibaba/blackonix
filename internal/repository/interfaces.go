@@ -22,6 +22,12 @@ type SessionRepository interface {
 	Update(ctx context.Context, session *domain.Session) error
 }
 
+type UserRepository interface {
+	FindByEmail(ctx context.Context, email string) (*domain.User, error)
+	FindByID(ctx context.Context, id string) (*domain.User, error)
+	Create(ctx context.Context, user *domain.User) error
+}
+
 type MessageRepository interface {
 	Create(ctx context.Context, msg *domain.Message) error
 	FindBySession(ctx context.Context, sessionID string, limit int) ([]domain.Message, error)

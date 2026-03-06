@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"blackonix/internal/domain"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -15,11 +17,20 @@ func NewDatabase(dsn string) (*gorm.DB, error) {
 		return nil, err
 	}
 
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+
 	if err := db.AutoMigrate(
 		&domain.Tenant{},
 		&domain.Contact{},
 		&domain.Session{},
 		&domain.Message{},
+		&domain.User{},
 	); err != nil {
 		return nil, err
 	}

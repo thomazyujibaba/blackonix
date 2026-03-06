@@ -18,6 +18,9 @@ type Config struct {
 	LLMApiKey   string
 	LLMModel    string
 
+	JWTSecret  string
+	CORSOrigin string
+
 	LogLevel string
 }
 
@@ -36,11 +39,18 @@ func Load() (*Config, error) {
 		LLMApiKey:   getEnv("LLM_API_KEY", ""),
 		LLMModel:    getEnv("LLM_MODEL", "gpt-4o"),
 
+		JWTSecret:  getEnv("JWT_SECRET", ""),
+		CORSOrigin: getEnv("CORS_ORIGIN", "http://localhost:3001"),
+
 		LogLevel: getEnv("LOG_LEVEL", "info"),
 	}
 
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
+	}
+
+	if cfg.JWTSecret == "" {
+		return nil, fmt.Errorf("JWT_SECRET is required")
 	}
 
 	return cfg, nil
