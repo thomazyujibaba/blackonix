@@ -45,3 +45,24 @@ func (r *contactRepo) FindByID(ctx context.Context, id string) (*domain.Contact,
 	}
 	return &contact, nil
 }
+
+func (r *contactRepo) List(ctx context.Context, tenantID string, params PaginationParams) (*PaginatedResult[domain.Contact], error) {
+	var contacts []domain.Contact
+	var total int64
+
+	q := r.db.WithContext(ctx).Model(&domain.Contact{})
+	if tenantID != "" {
+		q = q.Where("tenant_id = ?", tenantID)
+	}
+
+	q.Count(&total)
+
+	offset := (params.Page - 1) * params.Limit
+	if err := q.Order("created_at DESC").Offset(offset).Limit(params.Limit).Find(&contacts).Error; err != nil {
+		return nil, err
+	}
+
+	return &PaginatedResult[domain.Contact]{
+		Data: contacts, Total: total, Page: params.Page, Limit: params.Limit,
+	}, nil
+}

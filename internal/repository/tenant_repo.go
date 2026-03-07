@@ -30,3 +30,31 @@ func (r *tenantRepo) FindByID(ctx context.Context, id string) (*domain.Tenant, e
 	}
 	return &tenant, nil
 }
+
+func (r *tenantRepo) List(ctx context.Context, params PaginationParams) (*PaginatedResult[domain.Tenant], error) {
+	var tenants []domain.Tenant
+	var total int64
+
+	r.db.WithContext(ctx).Model(&domain.Tenant{}).Count(&total)
+
+	offset := (params.Page - 1) * params.Limit
+	if err := r.db.WithContext(ctx).Order("created_at DESC").Offset(offset).Limit(params.Limit).Find(&tenants).Error; err != nil {
+		return nil, err
+	}
+
+	return &PaginatedResult[domain.Tenant]{
+		Data: tenants, Total: total, Page: params.Page, Limit: params.Limit,
+	}, nil
+}
+
+func (r *tenantRepo) Create(ctx context.Context, tenant *domain.Tenant) error {
+	return r.db.WithContext(ctx).Create(tenant).Error
+}
+
+func (r *tenantRepo) Update(ctx context.Context, tenant *domain.Tenant) error {
+	return r.db.WithContext(ctx).Save(tenant).Error
+}
+
+func (r *tenantRepo) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&domain.Tenant{}, "id = ?", id).Error
+}

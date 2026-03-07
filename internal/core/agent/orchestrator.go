@@ -9,6 +9,8 @@ import (
 	"log"
 )
 
+const maxContextMessages = 30
+
 // Orchestrator é o "cérebro" do sistema. Recebe uma mensagem, decide o fluxo
 // (BOT vs HUMAN) e orquestra LLM + Tool Calls.
 type Orchestrator struct {
@@ -40,6 +42,11 @@ func (o *Orchestrator) ProcessMessage(ctx context.Context, session *domain.Sessi
 		Role:    "user",
 		Content: userMessage,
 	})
+
+	// Trunca histórico para evitar crescimento ilimitado
+	if len(session.ContextMemory) > maxContextMessages {
+		session.ContextMemory = session.ContextMemory[len(session.ContextMemory)-maxContextMessages:]
+	}
 
 	// Monta as mensagens para a LLM
 	messages := o.buildMessages(session)

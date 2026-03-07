@@ -6,11 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"blackonix/internal/ports"
 )
 
-const openaiURL = "https://api.openai.com/v1/chat/completions"
+const (
+	openaiURL         = "https://api.openai.com/v1/chat/completions"
+	openaiHTTPTimeout = 45 * time.Second
+)
 
 type openaiClient struct {
 	httpClient *http.Client
@@ -20,7 +24,7 @@ type openaiClient struct {
 
 func NewOpenAIClient(apiKey, model string) ports.LLMClient {
 	return &openaiClient{
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: openaiHTTPTimeout},
 		apiKey:     apiKey,
 		model:      model,
 	}

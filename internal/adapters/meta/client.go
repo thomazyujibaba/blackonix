@@ -7,23 +7,85 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"blackonix/internal/domain"
 	"blackonix/internal/ports"
 )
 
-const graphAPIURL = "https://graph.facebook.com/v21.0"
+const (
+	graphAPIURL     = "https://graph.facebook.com/v21.0"
+	metaHTTPTimeout = 30 * time.Second
+	maxMediaSize    = 25 * 1024 * 1024
+)
 
 type client struct {
 	httpClient *http.Client
 }
 
-func NewMetaClient() ports.MetaAPI {
+func NewMetaChannel() ports.MessagingChannel {
 	return &client{
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: metaHTTPTimeout},
 	}
 }
 
-func (c *client) SendTextMessage(ctx context.Context, token, phoneNumberID, to, body string) error {
+func (c *client) ParseWebhook(body []byte) ([]ports.NormalizedMessage, error) {
+	var payload WebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("unmarshal meta webhook: %w", err)
+	}
+
+	var messages []ports.NormalizedMessage
+	for _, entry := range payload.Entry {
+		for _, change := range entry.Changes {
+			if change.Field != "messages" {
+				continue
+			}
+
+			contactNames := make(map[string]string)
+			for _, ct := range change.Value.Contacts {
+				contactNames[ct.WaID] = ct.Profile.Name
+			}
+
+			for _, msg := range change.Value.Messages {
+				nm := ports.NormalizedMessage{
+					ExternalID:        msg.ID,
+					ChannelExternalID: entry.ID,
+					ChannelType:       domain.ChannelWhatsApp,
+					From:              msg.From,
+					FromName:          contactNames[msg.From],
+					Timestamp:         time.Now(),
+				}
+
+				switch msg.Type {
+				case "text":
+					nm.Type = ports.MsgText
+					if msg.Text != nil {
+						nm.Text = msg.Text.Body
+					}
+				case "audio":
+					nm.Type = ports.MsgAudio
+					if msg.Audio != nil {
+						nm.MediaID = msg.Audio.ID
+						nm.MediaMimeType = msg.Audio.MimeType
+					}
+				default:
+					nm.Type = ports.MsgText
+					nm.Text = "[mensagem não-textual recebida]"
+				}
+
+				messages = append(messages, nm)
+			}
+		}
+	}
+
+	return messages, nil
+}
+
+func (c *client) SendResponse(ctx context.Context, channel *domain.Channel, to string, response ports.RichResponse) error {
+	token := channel.Credentials.Get("meta_token")
+	phoneNumberID := channel.Credentials.Get("phone_number_id")
+
 	url := fmt.Sprintf("%s/%s/messages", graphAPIURL, phoneNumberID)
 
 	payload := map[string]interface{}{
@@ -31,7 +93,7 @@ func (c *client) SendTextMessage(ctx context.Context, token, phoneNumberID, to, 
 		"to":                to,
 		"type":              "text",
 		"text": map[string]string{
-			"body": body,
+			"body": response.Text,
 		},
 	}
 
@@ -61,8 +123,9 @@ func (c *client) SendTextMessage(ctx context.Context, token, phoneNumberID, to, 
 	return nil
 }
 
-func (c *client) DownloadMedia(ctx context.Context, token, mediaID string) ([]byte, error) {
-	// 1. Obter URL do media
+func (c *client) DownloadMedia(ctx context.Context, channel *domain.Channel, mediaID string) ([]byte, error) {
+	token := channel.Credentials.Get("meta_token")
+
 	url := fmt.Sprintf("%s/%s", graphAPIURL, mediaID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -88,7 +151,6 @@ func (c *client) DownloadMedia(ctx context.Context, token, mediaID string) ([]by
 		return nil, fmt.Errorf("decode media info: %w", err)
 	}
 
-	// 2. Baixar o arquivo de mídia
 	mediaReq, err := http.NewRequestWithContext(ctx, http.MethodGet, mediaInfo.URL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create media download request: %w", err)
@@ -105,7 +167,7 @@ func (c *client) DownloadMedia(ctx context.Context, token, mediaID string) ([]by
 		return nil, fmt.Errorf("meta media download returned status %d", mediaResp.StatusCode)
 	}
 
-	data, err := io.ReadAll(mediaResp.Body)
+	data, err := io.ReadAll(io.LimitReader(mediaResp.Body, maxMediaSize))
 	if err != nil {
 		return nil, fmt.Errorf("read media body: %w", err)
 	}
@@ -113,9 +175,9 @@ func (c *client) DownloadMedia(ctx context.Context, token, mediaID string) ([]by
 	return data, nil
 }
 
-func (c *client) VerifyWebhook(mode, token, challenge, verifyToken string) (string, error) {
-	if mode == "subscribe" && token == verifyToken {
-		return challenge, nil
+func (c *client) VerifyWebhook(req ports.VerifyRequest) (string, error) {
+	if req.Mode == "subscribe" && req.Token == req.VerifyToken {
+		return req.Challenge, nil
 	}
 	return "", fmt.Errorf("webhook verification failed")
 }

@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"blackonix/internal/ports"
 )
+
+const rocketChatHTTPTimeout = 15 * time.Second
 
 type client struct {
 	httpClient *http.Client
@@ -16,7 +19,7 @@ type client struct {
 
 func NewRocketChatClient() ports.RocketChatAPI {
 	return &client{
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: rocketChatHTTPTimeout},
 	}
 }
 
