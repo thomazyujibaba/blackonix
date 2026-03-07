@@ -5,8 +5,6 @@ import "time"
 type Tenant struct {
 	ID              string `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Name            string `gorm:"not null"`
-	WabaID          string `gorm:"column:waba_id;uniqueIndex;not null"`
-	MetaToken       string `gorm:"not null"`
 	RocketChatURL   string `gorm:"column:rocketchat_url"`
 	RocketChatToken string `gorm:"column:rocketchat_token"`
 	CreatedAt       time.Time

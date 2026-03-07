@@ -19,7 +19,6 @@ type PaginatedResult[T any] struct {
 }
 
 type TenantRepository interface {
-	FindByWabaID(ctx context.Context, wabaID string) (*domain.Tenant, error)
 	FindByID(ctx context.Context, id string) (*domain.Tenant, error)
 	List(ctx context.Context, params PaginationParams) (*PaginatedResult[domain.Tenant], error)
 	Create(ctx context.Context, tenant *domain.Tenant) error
