@@ -165,8 +165,6 @@ registry.Register(meuNovoPlugin)
 | `GET` | `/webhook/whatsapp` | Verificacao do webhook (Meta) |
 | `POST` | `/webhook/whatsapp` | Recebe mensagens do WhatsApp |
 | `POST` | `/webhook/telegram/:token` | Recebe mensagens do Telegram |
-| `GET` | `/webhook` | Legacy - verificacao Meta |
-| `POST` | `/webhook` | Legacy - mensagens WhatsApp |
 
 ## Tipos de Mensagem Suportados
 

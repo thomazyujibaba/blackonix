@@ -1,12 +1,13 @@
-# BlackOnix - Guia Rápido de Instalação
+# BlackOnix - Guia Rapido de Instalacao
 
-## Pré-requisitos
+## Pre-requisitos
 
-1. **Go 1.21+** - [Download](https://go.dev/dl/)
-2. **PostgreSQL** - Pode ser local ou via [Supabase](https://supabase.com) (gratuito)
-3. **Conta Meta Developer** - Para a WhatsApp Cloud API
+1. **Go 1.25+** - [Download](https://go.dev/dl/)
+2. **PostgreSQL** - Local ou via [Supabase](https://supabase.com) (gratuito)
+3. **Conta Meta Developer** - Para WhatsApp Cloud API (opcional)
+4. **Bot do Telegram** - Via @BotFather (opcional)
 
-Verifique se o Go está instalado:
+Verifique se o Go esta instalado:
 
 ```bash
 go version
@@ -15,11 +16,11 @@ go version
 ## 1. Clonar o projeto
 
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/thomazyujibaba/blackonix.git
 cd blackonix
 ```
 
-## 2. Configurar variáveis de ambiente
+## 2. Configurar variaveis de ambiente
 
 Copie o arquivo de exemplo e edite com seus dados:
 
@@ -30,14 +31,13 @@ cp .env.example .env
 Abra o `.env` e preencha:
 
 ```env
-# Porta do servidor (padrão: 3000)
+# Porta do servidor (padrao: 3000)
 SERVER_PORT=3000
 
-# URL de conexão do PostgreSQL (Supabase ou local)
-# Supabase: vá em Project Settings > Database > Connection string > URI
-DATABASE_URL=postgresql://postgres:SUA_SENHA@db.SEU_PROJETO.supabase.co:5432/postgres
+# URL de conexao do PostgreSQL
+DATABASE_URL=postgresql://postgres:SUA_SENHA@localhost:5432/blackonix
 
-# Token de verificação do webhook (você inventa, ex: meu-token-secreto-123)
+# Token de verificacao do webhook Meta (voce inventa)
 META_VERIFY_TOKEN=meu-token-secreto-123
 
 # App Secret da Meta (Meta Developer > App > Settings > Basic)
@@ -46,23 +46,27 @@ META_APP_SECRET=seu-app-secret
 # Chave da OpenAI (https://platform.openai.com/api-keys)
 LLM_API_KEY=sk-sua-chave-aqui
 
-# Modelo da LLM (padrão: gpt-4o)
+# Modelo da LLM (padrao: gpt-4o)
 LLM_MODEL=gpt-4o
 
-# Nível de log (info, debug, warn, error)
+# JWT Secret para autenticacao do dashboard
+JWT_SECRET=um-secret-forte-aqui
+
+# Nivel de log (info, debug, warn, error)
 LOG_LEVEL=info
 ```
 
 ### De onde tirar cada valor?
 
-| Variável | Onde encontrar |
+| Variavel | Onde encontrar |
 |---|---|
-| `DATABASE_URL` | Supabase > Project Settings > Database > Connection string (URI) |
-| `META_VERIFY_TOKEN` | Você inventa (qualquer string). Vai usar o mesmo na config do webhook na Meta |
+| `DATABASE_URL` | PostgreSQL local ou Supabase > Project Settings > Database > Connection string (URI) |
+| `META_VERIFY_TOKEN` | Voce inventa (qualquer string). Usa o mesmo na config do webhook na Meta |
 | `META_APP_SECRET` | Meta for Developers > Seu App > Settings > Basic > App Secret |
 | `LLM_API_KEY` | OpenAI > API Keys > Create new secret key |
+| `JWT_SECRET` | Qualquer string forte (use `openssl rand -hex 32`) |
 
-## 3. Instalar dependências
+## 3. Instalar dependencias
 
 ```bash
 go mod download
@@ -74,15 +78,13 @@ go mod download
 go run cmd/server/main.go
 ```
 
-Você verá:
+Voce vera:
 
 ```
 BlackOnix starting on :3000
 ```
 
-## 5. Verificar se está funcionando
-
-Acesse no navegador ou com curl:
+## 5. Verificar se esta funcionando
 
 ```bash
 curl http://localhost:3000/health
@@ -94,82 +96,88 @@ Resposta esperada:
 {"service":"blackonix","status":"ok"}
 ```
 
-## 6. Configurar o Webhook na Meta
+## 6. Cadastrar Tenant e Canais
 
-1. Vá em [Meta for Developers](https://developers.facebook.com)
+O sistema e multi-tenant com multiplos canais por tenant. Use o seed script:
+
+```bash
+# Somente tenant (sem canais)
+go run cmd/seed/main.go
+
+# Com canal WhatsApp
+WABA_ID=seu-waba-id META_TOKEN=seu-meta-token go run cmd/seed/main.go
+
+# Com canal Telegram
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF go run cmd/seed/main.go
+
+# Com ambos
+WABA_ID=seu-waba-id META_TOKEN=seu-meta-token TELEGRAM_BOT_TOKEN=123456:ABC-DEF go run cmd/seed/main.go
+```
+
+## 7. Configurar Webhook do WhatsApp
+
+1. Va em [Meta for Developers](https://developers.facebook.com)
 2. Seu App > WhatsApp > Configuration > Webhook
 3. Clique em **Edit**
-4. **Callback URL**: `https://seu-dominio.com/webhook` (precisa ser HTTPS público)
-5. **Verify token**: O mesmo valor que você colocou em `META_VERIFY_TOKEN`
+4. **Callback URL**: `https://seu-dominio.com/webhook/whatsapp` (precisa ser HTTPS publico)
+5. **Verify token**: O mesmo valor que voce colocou em `META_VERIFY_TOKEN`
 6. Clique em **Verify and save**
 7. Em **Webhook fields**, inscreva-se em `messages`
 
-### Para testes locais (sem domínio público)
+### Para testes locais (sem dominio publico)
 
 Use o [ngrok](https://ngrok.com) para expor sua porta local:
 
 ```bash
-# Instale o ngrok (https://ngrok.com/download)
 ngrok http 3000
 ```
 
-O ngrok vai gerar uma URL tipo `https://abc123.ngrok.io`. Use essa URL + `/webhook` na configuração da Meta.
+O ngrok vai gerar uma URL tipo `https://abc123.ngrok.io`. Use essa URL + `/webhook/whatsapp` na configuracao da Meta.
 
-## 7. Cadastrar um Tenant no banco
+## 8. Configurar Webhook do Telegram
 
-O sistema é multi-tenant. Você precisa cadastrar sua empresa no banco para que o webhook funcione.
+1. Crie um bot no Telegram via [@BotFather](https://t.me/BotFather)
+2. Copie o token do bot (formato: `123456:ABC-DEF`)
+3. Registre o webhook:
 
-Execute este SQL no Supabase (SQL Editor) ou em qualquer cliente PostgreSQL:
-
-```sql
-INSERT INTO tenants (id, name, waba_id, meta_token, rocketchat_url, rocketchat_token)
-VALUES (
-  gen_random_uuid(),
-  'Minha Empresa',
-  'SEU_WABA_ID',          -- Meta > WhatsApp > API Setup > WhatsApp Business Account ID
-  'SEU_META_ACCESS_TOKEN', -- Meta > WhatsApp > API Setup > Temporary access token
-  'https://seu-rocketchat.com', -- URL do Rocket.Chat (opcional)
-  'token-do-rocketchat'         -- Token do Rocket.Chat (opcional)
-);
+```bash
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF \
+TELEGRAM_WEBHOOK_URL=https://seu-dominio.com/webhook/telegram/123456:ABC-DEF \
+go run cmd/telegram-setup/main.go
 ```
 
-O `WABA_ID` e o `Access Token` estão em: Meta for Developers > Seu App > WhatsApp > API Setup.
+A URL do webhook inclui o token do bot para validacao.
 
 ## Pronto!
 
-Envie uma mensagem para o número de teste do WhatsApp configurado na Meta. O BlackOnix vai:
+Envie uma mensagem para o WhatsApp ou Telegram configurado. O BlackOnix vai:
 
 1. Receber a mensagem via webhook
-2. Identificar o tenant pelo WABA ID
-3. Criar o contato e sessão automaticamente
-4. Processar com a LLM (modo BOT)
-5. Responder via WhatsApp
+2. Identificar o canal pelo ExternalID (WABA ID ou Bot ID)
+3. Criar o contato e sessao automaticamente
+4. Se for audio, transcrever via Whisper
+5. Processar com a LLM (modo BOT)
+6. Responder via o canal de origem
 
-## Estrutura do Projeto
+## Migracao de Dados
 
+Se voce ja tinha tenants com campos `waba_id` e `meta_token` na tabela antiga, rode o script de migracao:
+
+```bash
+go run cmd/migrate-channels/main.go
 ```
-blackonix/
-├── cmd/server/main.go          # Ponto de entrada
-├── internal/
-│   ├── config/                 # Variáveis de ambiente
-│   ├── domain/                 # Modelos (Tenant, Contact, Session, Message)
-│   ├── repository/             # Acesso ao banco (PostgreSQL/Gorm)
-│   ├── ports/                  # Interfaces para serviços externos
-│   ├── adapters/               # Implementações (Meta, RocketChat, OpenAI)
-│   ├── core/
-│   │   ├── agent/              # Tool Registry + Orchestrator (cérebro)
-│   │   └── state/              # Máquina de estados (BOT <-> HUMAN)
-│   ├── handlers/               # Rotas do webhook (Fiber)
-│   └── plugins/                # Tools expansíveis (CheckStock, TransferToHuman)
-└── .env.example
-```
+
+Isso cria registros na tabela `channels` e remove as colunas antigas do `tenants`.
 
 ## Troubleshooting
 
-| Problema | Solução |
+| Problema | Solucao |
 |---|---|
-| `DATABASE_URL is required` | Preencha a variável `DATABASE_URL` no `.env` |
-| Webhook não verifica | Confirme que `META_VERIFY_TOKEN` no `.env` é igual ao configurado na Meta |
-| Mensagem não chega | Verifique se o ngrok está rodando e a URL no webhook da Meta está correta |
-| Erro de LLM | Verifique se `LLM_API_KEY` é válida e tem créditos |
-| Tabelas não existem | O servidor cria as tabelas automaticamente ao iniciar (AutoMigrate) |
+| `DATABASE_URL is required` | Preencha a variavel `DATABASE_URL` no `.env` |
+| `JWT_SECRET is required` | Preencha a variavel `JWT_SECRET` no `.env` |
+| Webhook WhatsApp nao verifica | Confirme que `META_VERIFY_TOKEN` no `.env` e igual ao configurado na Meta |
+| Webhook Telegram nao funciona | Verifique se o bot token na URL corresponde ao registrado no banco |
+| Mensagem nao chega | Verifique se o ngrok esta rodando e a URL no webhook esta correta |
+| Erro de LLM | Verifique se `LLM_API_KEY` e valida e tem creditos |
+| Tabelas nao existem | O servidor cria as tabelas automaticamente ao iniciar (AutoMigrate) |
+| Canal nao encontrado | Rode o seed com as variaveis de ambiente do canal (`WABA_ID`, `TELEGRAM_BOT_TOKEN`) |

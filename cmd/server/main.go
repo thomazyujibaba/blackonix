@@ -88,10 +88,6 @@ func main() {
 	// Telegram
 	app.Post("/webhook/telegram/:token", webhookHandler.HandleTelegramWebhook)
 
-	// Legacy routes (backward compat)
-	app.Get("/webhook", webhookHandler.VerifyWhatsAppWebhook)
-	app.Post("/webhook", webhookHandler.HandleWhatsAppWebhook)
-
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":  "ok",
