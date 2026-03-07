@@ -1,66 +1,73 @@
 # BlackOnix
 
-Agentic Middleware para multi-atendimento via WhatsApp. Orquestra mensagens entre a WhatsApp Cloud API (Meta), Rocket.Chat (Omnichannel) e LLMs com Function Calling, usando Supabase (PostgreSQL) como banco de dados.
+Agentic Middleware para multi-atendimento via WhatsApp e Telegram. Orquestra mensagens entre plataformas de messaging, Rocket.Chat (Omnichannel) e LLMs com Function Calling, usando PostgreSQL como banco de dados.
 
-## O que é
+## O que e
 
-BlackOnix é um SaaS B2B que funciona como um middleware inteligente entre o WhatsApp e seus sistemas internos. Ele:
+BlackOnix e um SaaS B2B que funciona como um middleware inteligente entre canais de messaging e seus sistemas internos. Ele:
 
-- Recebe mensagens do WhatsApp via webhook da Meta
+- Recebe mensagens do WhatsApp e Telegram via webhook
 - Processa com IA (LLM + Function Calling) no modo BOT
-- Transfere para atendentes humanos no Rocket.Chat quando necessário
-- Suporta múltiplas empresas (multi-tenant)
-- É extensível via sistema de plugins
+- Transfere para atendentes humanos no Rocket.Chat quando necessario
+- Suporta multiplas empresas (multi-tenant) com multiplos canais por tenant
+- E extensivel via sistema de plugins
+- Suporta respostas ricas (botoes inline, teclados customizados) no Telegram
 
 ## Arquitetura
 
 ```
 WhatsApp ──webhook──▸ BlackOnix ──▸ LLM (OpenAI)
-                         │              │
-                         │         Tool Calls
-                         │              │
-                         ▼              ▼
-                    Rocket.Chat    Plugins (Whisper, PIX, etc.)
-                    (Omnichannel)
-                         │
-                    Atendente Humano
+Telegram ──webhook──▸     │              │
+                          │         Tool Calls
+                          │              │
+                          ▼              ▼
+                     Rocket.Chat    Plugins (Whisper, etc.)
+                     (Omnichannel)
+                          │
+                     Atendente Humano
 ```
 
-### Padrões
+### Padroes
 
 - **Hexagonal Architecture** (Ports & Adapters)
-- **Injeção de Dependência** via interfaces
-- **Plugin/Tool Registry** para extensão dinâmica
-- **State Machine** para controle de fluxo (BOT ↔ HUMAN)
+- **Channel Abstraction** - Interface `MessagingChannel` para suportar multiplas plataformas
+- **Injecao de Dependencia** via interfaces
+- **Plugin/Tool Registry** para extensao dinamica
+- **State Machine** para controle de fluxo (BOT <-> HUMAN)
 
 ### Estrutura
 
 ```
 blackonix/
-├── cmd/server/main.go              # Ponto de entrada + DI
+├── cmd/
+│   ├── server/main.go                 # Ponto de entrada + DI
+│   ├── seed/main.go                   # Seed de tenant e channels
+│   ├── migrate-channels/main.go       # Migracao de dados para Channel model
+│   └── telegram-setup/main.go         # Registro de webhook no Telegram
 ├── internal/
-│   ├── config/                     # Variáveis de ambiente (.env)
-│   ├── domain/                     # Modelos: Tenant, Contact, Session, Message
-│   ├── repository/                 # Interfaces + implementações Gorm (PostgreSQL)
-│   ├── ports/                      # Interfaces: MetaAPI, RocketChatAPI, LLMClient
+│   ├── config/                        # Variaveis de ambiente (.env)
+│   ├── domain/                        # Modelos: Tenant, Channel, Contact, Session, Message
+│   ├── repository/                    # Interfaces + implementacoes GORM (PostgreSQL)
+│   ├── ports/                         # Interfaces: MessagingChannel, RocketChatAPI, LLMClient
 │   ├── adapters/
-│   │   ├── meta/                   # Cliente WhatsApp Cloud API
-│   │   ├── rocketchat/             # Cliente Rocket.Chat Livechat
-│   │   └── llm/                    # Cliente OpenAI (Chat Completions)
+│   │   ├── meta/                      # WhatsApp Cloud API (MessagingChannel)
+│   │   ├── telegram/                  # Telegram Bot API (MessagingChannel)
+│   │   ├── rocketchat/                # Rocket.Chat Livechat
+│   │   └── llm/                       # OpenAI (Chat Completions)
 │   ├── core/
-│   │   ├── agent/                  # AgentTool interface, ToolRegistry, Orchestrator
-│   │   └── state/                  # Máquina de estados (BOT ↔ HUMAN)
-│   ├── handlers/                   # Webhook handlers (Fiber)
-│   └── plugins/                    # Tools: TransferToHuman, AudioTranscriber
+│   │   ├── agent/                     # AgentTool interface, ToolRegistry, Orchestrator
+│   │   └── state/                     # Maquina de estados (BOT <-> HUMAN)
+│   ├── handlers/                      # Webhook handlers (Fiber)
+│   └── plugins/                       # Tools: TransferToHuman, AudioTranscriber
 ```
 
 ## Stack
 
-- **Go** 1.21+
+- **Go** 1.25+
 - **Fiber** v2 (web framework)
-- **Gorm** (ORM para PostgreSQL)
-- **Supabase** PostgreSQL
-- **OpenAI** API (Function Calling)
+- **GORM** (ORM para PostgreSQL)
+- **PostgreSQL**
+- **OpenAI** API (Function Calling + Whisper)
 
 ## Quick Start
 
@@ -71,31 +78,62 @@ cd blackonix
 
 # 2. Configure
 cp .env.example .env
-# Edite o .env com suas credenciais (veja QUICKSTART.md para detalhes)
+# Edite o .env com suas credenciais
 
-# 3. Instale dependências
+# 3. Instale dependencias
 go mod download
 
 # 4. Rode
 go run cmd/server/main.go
 ```
 
-Veja o [QUICKSTART.md](QUICKSTART.md) para o guia completo com screenshots e troubleshooting.
+### Configurar Telegram
+
+```bash
+# 1. Crie um bot no @BotFather e obtenha o token
+# 2. Registre o webhook
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF \
+TELEGRAM_WEBHOOK_URL=https://seudominio.com/webhook/telegram/123456:ABC-DEF \
+go run cmd/telegram-setup/main.go
+
+# 3. Crie o channel no banco
+WABA_ID=... META_TOKEN=... TELEGRAM_BOT_TOKEN=123456:ABC-DEF \
+go run cmd/seed/main.go
+```
+
+## Channel Abstraction
+
+O sistema usa uma interface `MessagingChannel` que abstrai a comunicacao com qualquer plataforma:
+
+```go
+type MessagingChannel interface {
+    ParseWebhook(body []byte) ([]NormalizedMessage, error)
+    SendResponse(ctx context.Context, channel *domain.Channel, to string, response RichResponse) error
+    DownloadMedia(ctx context.Context, channel *domain.Channel, mediaID string) ([]byte, error)
+    VerifyWebhook(req VerifyRequest) (string, error)
+}
+```
+
+Cada tenant pode ter multiplos canais. As credenciais ficam no campo `Credentials` (JSONB) do model `Channel`:
+
+- **WhatsApp**: `{"meta_token":"...", "waba_id":"...", "phone_number_id":"..."}`
+- **Telegram**: `{"bot_token":"..."}`
 
 ## Fluxo do Webhook
 
-1. `POST /webhook` recebe mensagem da Meta
-2. Identifica o Tenant pelo WABA ID
-3. Cria/carrega Contact e Session
-4. **Se áudio** → transcreve via Whisper automaticamente
-5. **Se estado = HUMAN** → encaminha para Rocket.Chat
-6. **Se estado = BOT** → envia para LLM com Tools registradas
-7. Se a LLM pedir Tool Call → executa via Registry → devolve resultado
-8. Responde ao cliente via WhatsApp
+1. Webhook recebe mensagem (`POST /webhook/whatsapp` ou `POST /webhook/telegram/:token`)
+2. Adapter faz parse para `NormalizedMessage` (formato canal-agnostico)
+3. Identifica o Channel pelo ExternalID (WABA ID ou Bot ID)
+4. Cria/carrega Contact e Session
+5. **Se audio** -> transcreve via Whisper automaticamente
+6. **Se estado = HUMAN** -> encaminha para Rocket.Chat
+7. **Se estado = BOT** -> envia para LLM com Tools registradas
+8. Se a LLM pedir Tool Call -> executa via Registry -> devolve resultado
+9. Responde ao cliente via canal de origem (com suporte a botoes no Telegram)
 
 ## Sistema de Plugins
 
-Criar um novo plugin é simples. Implemente a interface `AgentTool`:
+Criar um novo plugin e simples. Implemente a interface `AgentTool`:
 
 ```go
 type AgentTool interface {
@@ -109,30 +147,37 @@ type AgentTool interface {
 Registre no `ToolRegistry`:
 
 ```go
-registry.Register(meuNovoPPlugin)
+registry.Register(meuNovoPlugin)
 ```
 
-### Plugins incluídos
+### Plugins incluidos
 
-| Plugin | Descrição |
+| Plugin | Descricao |
 |---|---|
-| `transcribe_audio` | Transcreve áudios do WhatsApp via OpenAI Whisper (automático) |
+| `transcribe_audio` | Transcreve audios de qualquer canal via OpenAI Whisper (automatico) |
 | `transfer_to_human` | Transfere conversa para atendente no Rocket.Chat |
-
-### Ideias para expansão
-
-- `PixGenerator` - Gerar cobranças PIX
-- `SalesCopilot` - Copiloto de vendas com contexto do cliente
-- `OrderTracker` - Rastreamento de pedidos
 
 ## Endpoints
 
-| Método | Rota | Descrição |
+| Metodo | Rota | Descricao |
 |---|---|---|
 | `GET` | `/health` | Health check |
-| `GET` | `/webhook` | Verificação do webhook (Meta) |
-| `POST` | `/webhook` | Recebe mensagens do WhatsApp |
+| `GET` | `/webhook/whatsapp` | Verificacao do webhook (Meta) |
+| `POST` | `/webhook/whatsapp` | Recebe mensagens do WhatsApp |
+| `POST` | `/webhook/telegram/:token` | Recebe mensagens do Telegram |
+| `GET` | `/webhook` | Legacy - verificacao Meta |
+| `POST` | `/webhook` | Legacy - mensagens WhatsApp |
 
-## Licença
+## Tipos de Mensagem Suportados
+
+| Tipo | WhatsApp | Telegram |
+|---|---|---|
+| Texto | Sim | Sim |
+| Audio | Sim (transcricao automatica) | Sim (transcricao automatica) |
+| Foto | - | Sim |
+| Video | - | Sim |
+| Callback (botoes) | - | Sim |
+
+## Licenca
 
 MIT
