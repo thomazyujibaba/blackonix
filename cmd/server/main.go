@@ -7,6 +7,7 @@ import (
 	"blackonix/internal/adapters/llm"
 	"blackonix/internal/adapters/meta"
 	"blackonix/internal/adapters/rocketchat"
+	"blackonix/internal/adapters/telegram"
 	"blackonix/internal/config"
 	"blackonix/internal/core/agent"
 	"blackonix/internal/core/state"
@@ -45,7 +46,8 @@ func main() {
 
 	// Channel adapters
 	channelAdapters := map[domain.ChannelType]ports.MessagingChannel{
-		domain.ChannelWhatsApp: meta.NewMetaChannel(),
+		domain.ChannelWhatsApp:  meta.NewMetaChannel(),
+		domain.ChannelTelegram: telegram.NewTelegramChannel(),
 	}
 
 	rocketChatAPI := rocketchat.NewRocketChatClient()
@@ -82,6 +84,9 @@ func main() {
 	// Routes
 	app.Get("/webhook/whatsapp", webhookHandler.VerifyWhatsAppWebhook)
 	app.Post("/webhook/whatsapp", webhookHandler.HandleWhatsAppWebhook)
+
+	// Telegram
+	app.Post("/webhook/telegram/:token", webhookHandler.HandleTelegramWebhook)
 
 	// Legacy routes (backward compat)
 	app.Get("/webhook", webhookHandler.VerifyWhatsAppWebhook)
